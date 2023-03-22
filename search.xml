@@ -328,4 +328,48 @@
         <tag>考研</tag>
       </tags>
   </entry>
+  <entry>
+    <title>深入浅出索引（上）</title>
+    <url>/2023/03/22/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8A%EF%BC%89/</url>
+    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​        索引的出现其实就是为了加速查询效率的，它就像一本书的目录。在不借助目录的情况下，查询一个知识点的效率可能会比较慢，但有了目录，则可以快速定位知识点在哪一页。</p>
+<h2 id="二、索引的常见模型"><a href="#二、索引的常见模型" class="headerlink" title="二、索引的常见模型"></a>二、索引的常见模型</h2><h6 id="1、哈希表："><a href="#1、哈希表：" class="headerlink" title="1、哈希表："></a>1、哈希表：</h6><p>![截屏2023-03-22 19.18.46](深入浅出索引（上）/截屏2023-03-22 19.18.46.png)</p>
+<p>​        哈希表查询复杂度为O(1)，通过哈希函数快速查询key对应的value。图中所用到的处理冲突的方法为拉链法。即便查询复杂度为$O(1)$，哈希表还是不适合用于范围查询。</p>
+<p> <strong>缺点：</strong>想象一下如果进行范围查询，那岂不是需要一个一个的查？查询复杂度高达$O(n)$。</p>
+<h6 id="2、有序数组："><a href="#2、有序数组：" class="headerlink" title="2、有序数组："></a>2、有序数组：</h6><p>![截屏2023-03-22 19.31.02](深入浅出索引（上）/截屏2023-03-22 19.31.02.png) </p>
+<p>​         由于有序数组的有序性，等值查询和范围查询都比较适合。有序这一特性能够保证等值查询可以用时间复杂度为$O(logn)$的二分查找。在范围查询时，通过二分查找出范围的第一个元素，接着一直往下遍历就可以实现范围查询了！</p>
+<p><strong>缺点：</strong>如果需要插入元素，那么是一件非常麻烦的事情…</p>
+<h6 id="3、二叉搜索树-B树-B-树："><a href="#3、二叉搜索树-B树-B-树：" class="headerlink" title="3、二叉搜索树/B树/B+树："></a>3、二叉搜索树/B树/B+树：</h6><p>![截屏2023-03-22 19.41.33](深入浅出索引（上）/截屏2023-03-22 19.41.33.png)</p>
+<p>​        查询复杂度为$O(logN)$,更新维护的复杂度也是$O(logN)$。实际会采用多叉树去维护索引。</p>
+<p> <strong>缺点：</strong>实际上不会采用这种方式。假设有100万个节点，树高为20。那么每次都需要从磁盘读入一个节点到内存，在内存分析左孩子和右孩子在哪以后再去从磁盘读取左孩子和右孩子。要知道，磁盘I/O可是非常耗时的操作。</p>
+<h2 id="三、InnoDB索引模型"><a href="#三、InnoDB索引模型" class="headerlink" title="三、InnoDB索引模型"></a>三、InnoDB索引模型</h2><p>现在有以下建表语句。其中有主键id和索引k，在InnoDB中，每个索引对应一颗B+树。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> T(</span><br><span class="line">id <span class="type">int</span> <span class="keyword">primary</span> key,</span><br><span class="line">k <span class="type">int</span> <span class="keyword">not</span> <span class="keyword">null</span>,</span><br><span class="line">name <span class="type">varchar</span>(<span class="number">16</span>),</span><br><span class="line">index (k))engine<span class="operator">=</span>InnoDB;</span><br></pre></td></tr></table></figure>
+
+<p>![截屏2023-03-22 19.51.04](深入浅出索引（上）/截屏2023-03-22 19.51.04.png)</p>
+<p>主键索引的叶子结点存的是整行数据。在InnoDB中，主键索引也称为聚簇索引。</p>
+<p>非主键索引的叶子结点存的是主键的值。在InnoDB中，非主键索引也被称为二级索引。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span><span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> ID<span class="operator">=</span><span class="number">500</span></span><br></pre></td></tr></table></figure>
+
+<p>在上述SQL语句中，会进行主键查询，只需要搜索ID这颗B+树就可以返回ID=500的数据块。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span><span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> k<span class="operator">=</span><span class="number">5</span></span><br></pre></td></tr></table></figure>
+
+<p>在上述SQL语句中，会进行普通索引查询，需要从索引k这颗B+树搜索得到ID=500以后，再根据这个ID=500去搜索主键ID这颗B+树。这个过程被称为<strong>回表</strong>。</p>
+<h2 id="四、索引维护"><a href="#四、索引维护" class="headerlink" title="四、索引维护"></a>四、索引维护</h2><p>​        为了维护有序性，在插入ID=400时，需要挪动数据页中ID=500、600的数据。想象一种更糟糕的情况如果插入的数据导致页分裂了呢？页分裂会导致原来塞满一个数据页的数据现在分成了两份，页利用率会降低。综上所述，会影响性能和页利用率。当然有分裂就有合并。当相邻两个页由于删除了数据，利用率很低之后，会将数据页做合并。合并的过程，可以认为是分裂过程的逆过程。（其实这些过程就是B+树的删除和添加操作）</p>
+<p>​        为了减少维护索引的开销（增加、删除叶子结点），一个解决办法是使用<strong>自增主键</strong>，在使用了自增主键后，每次的插入操作后都不涉及数据的挪动和分裂，也就减少了像刚刚那样维护索引的时候出现性能低下与页利用率低下的情况发生啦！</p>
+<p>​       除了考虑性能和页利用率以外，还需要考虑存储空间。假设现在有一个表，确实有一个唯一字段，比如身份证号，那应该用身份证号做主键呢还是用自增字段做主键呢？假如用了身份证号，那么二级索引的叶子结点就会比较大了，那么普通索引的占用空间就会比较大。</p>
+<p>​      <strong>显然，主键长度越小，普通索引的叶子节点就越小，普通索引占用的空间也就越小。</strong></p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>​        <strong>索引、索引模型：</strong>本文讲了从索引是什么开始引入，再介绍了有几种常见的索引模型，他们各自有什么缺点，接着引入了B+树这一索引模型。由于它的这一数据结构特点非常符合我们对数据的磁盘读写，所以已经被广泛应用到数据库引擎当中了。</p>
+<p>​        <strong>InnoDB、聚簇索引、二级索引、回表：</strong>接着再介绍了InnoDB的索引模型，讲了什么是聚簇索引，什么是二级索引，还介绍了主键索引查询和非主键索引查询的区别（非主键索引查询可能会回表）！</p>
+<p>​        <strong>索引维护：</strong>根据B+树的增加与删除操作和二级索引的特点，最后再从性能、页利用率和存储空间去分析了索引维护的开销。</p>
+<h2 id="思考题"><a href="#思考题" class="headerlink" title="思考题"></a>思考题</h2><p>以下重建普通索引和主键索引有什么问题？</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">drop</span> index k;</span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">add</span> index(k);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">drop</span> <span class="keyword">primary</span> key;</span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">add</span> <span class="keyword">primary</span> key(id);</span><br></pre></td></tr></table></figure>
+
+<p><strong>关于为什么要重建索引。</strong>文章里面有提到，索引可能因为删除，或者页分裂等原因，导致数据页有空洞，重建索引的过程会创建一个新的索引，把数据按顺序插入，这样页面的利用率最高，也就是索引更紧凑、更省空间。</p>
+<p><strong>答案：</strong>重建索引k的做法是合理的，可以达到省空间的目的。但是，重建主键的过程不合理。不论是删除主键还是创建主键，都会将整个表重建。所以连着执行这两个语句的话，第一个语句就白做了。</p>
+]]></content>
+      <tags>
+        <tag>MySQL</tag>
+      </tags>
+  </entry>
 </search>
