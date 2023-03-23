@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 5.4.2">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css" integrity="sha256-DfWjNxDkM94fVBWx1H5BMMp0Zq7luBlV8QRcSES7s+0=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.11.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":false,"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="一、引言 假设现在有如下建表语句...">
+<meta property="og:type" content="article">
+<meta property="og:title" content="深入浅出索引（下）">
+<meta property="og:url" content="http://example.com/2023/03/24/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8B%EF%BC%89/index.html">
+<meta property="og:site_name" content="CarJ&#39;s Blog!">
+<meta property="og:description" content="一、引言 假设现在有如下建表语句...">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-03-23T17:20:02.000Z">
+<meta property="article:modified_time" content="2023-03-23T17:21:05.228Z">
+<meta property="article:author" content="CarJ">
+<meta property="article:tag" content="MySQL">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://example.com/2023/03/24/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8B%EF%BC%89/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2023/03/24/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8B%EF%BC%89/","path":"2023/03/24/深入浅出索引（下）/","title":"深入浅出索引（下）"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>深入浅出索引（下） | CarJ's Blog!</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=26c47669ec4a080cd769f1254d9408fe"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"26c47669ec4a080cd769f1254d9408fe","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style><style>
+#needsharebutton-float {
+  bottom: 88px;
+  cursor: pointer;
+  left: -8px;
+  position: fixed;
+  z-index: 9999;
+}
+#needsharebutton-float .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 4px;
+  padding: 0 10px 0 14px;
+}
+</style>
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">CarJ's Blog!</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E3%80%81%E5%BC%95%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">一、引言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BA%8C%E3%80%81%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95"><span class="nav-number">2.</span> <span class="nav-text">二、覆盖索引</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%89%E3%80%81%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8E%9F%E5%88%99"><span class="nav-number">3.</span> <span class="nav-text">三、最左前缀原则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9B%9B%E3%80%81%E7%B4%A2%E5%BC%95%E4%B8%8B%E6%8E%A8"><span class="nav-number">4.</span> <span class="nav-text">四、索引下推</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BA%94%E3%80%81%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">五、总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%AD%E3%80%81%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">6.</span> <span class="nav-text">六、思考题</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="CarJ"
+      src="/images/avatar.png">
+  <p class="site-author-name" itemprop="name">CarJ</p>
+  <div class="site-description" itemprop="description">SYSUer</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">4</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author site-overview-item animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/CarJJJJ" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;CarJJJJ" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:893896371@qq.com" title="E-Mail → mailto:893896371@qq.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2023/03/24/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8B%EF%BC%89/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.png">
+      <meta itemprop="name" content="CarJ">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CarJ's Blog!">
+      <meta itemprop="description" content="SYSUer">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="深入浅出索引（下） | CarJ's Blog!">
+      <meta itemprop="description" content="一、引言
+假设现在有如下建表语句...">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          深入浅出索引（下）
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2023-03-24 01:20:02 / 修改时间：01:21:05" itemprop="dateCreated datePublished" datetime="2023-03-24T01:20:02+08:00">2023-03-24</time>
+    </span>
+
+  
+</div>
+
+            <div class="post-description">一、引言
+假设现在有如下建表语句...</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​    假设现在有如下建表语句</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> T (</span><br><span class="line">ID <span class="type">int</span> <span class="keyword">primary</span> key,</span><br><span class="line">k <span class="type">int</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>, </span><br><span class="line">s <span class="type">varchar</span>(<span class="number">16</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#x27;</span>,</span><br><span class="line">index k(k))</span><br><span class="line">engine<span class="operator">=</span>InnoDB;</span><br><span class="line"></span><br><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> T <span class="keyword">values</span>(<span class="number">100</span>,<span class="number">1</span>, <span class="string">&#x27;aa&#x27;</span>),(<span class="number">200</span>,<span class="number">2</span>,<span class="string">&#x27;bb&#x27;</span>),(<span class="number">300</span>,<span class="number">3</span>,<span class="string">&#x27;cc&#x27;</span>),(<span class="number">500</span>,<span class="number">5</span>,<span class="string">&#x27;ee&#x27;</span>),(<span class="number">600</span>,<span class="number">6</span>,<span class="string">&#x27;ff&#x27;</span>),(<span class="number">700</span>,<span class="number">7</span>,<span class="string">&#x27;gg&#x27;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>![截屏2023-03-24 00.04.44](深入浅出索引（下）/截屏2023-03-24 00.04.44.png)</p>
+<p><strong>如果执行如下SQL语句，那么会执行几次树的搜索操作？</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> k <span class="keyword">between</span> <span class="number">3</span> <span class="keyword">and</span> <span class="number">5</span></span><br></pre></td></tr></table></figure>
+
+<p>1.首先会搜索索引k的B+树，找到k=3叶子结点，获取主键ID=300。</p>
+<p>2.回表，搜索索引ID的B+树，找到ID=300的叶子结点，获取整行数据。</p>
+<p>3.从k=3开始向下找，找到k=5，获得ID=500的叶子结点。</p>
+<p>4.回表，获得ID=500的叶子结点，获取整行数据。</p>
+<p>5.找到k=6，不符合查询规则，退出。</p>
+<p><strong>总共搜索了三次B+树，一次二级索引的B+树搜索，两次回表。</strong></p>
+<h2 id="二、覆盖索引"><a href="#二、覆盖索引" class="headerlink" title="二、覆盖索引"></a>二、覆盖索引</h2><p>​       如果执行的是以下语句，那么就不需要回表。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> ID <span class="keyword">from</span> T <span class="keyword">where</span> k <span class="keyword">between</span> <span class="number">3</span> <span class="keyword">and</span> <span class="number">5</span></span><br></pre></td></tr></table></figure>
+
+<p>​        如果索引k已经“覆盖了”我们的查询需求，我们称这种索引为覆盖索引。</p>
+<p>​       <strong>由于覆盖索引可以减少树的搜索次数，显著提升查询性能，所以使用覆盖索引是一个常用的性能优化手段。</strong></p>
+<p>​       在InnoDB引擎中是读了三个记录，但MySQL会认为是扫描行数为2，因为MySQL的Server层找引擎只拿到了2条记录。</p>
+<p>假设现在有如下市民表建表语句：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> `tuser` (</span><br><span class="line">  `id` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `id_card` <span class="type">varchar</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `name` <span class="type">varchar</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `age` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `ismale` tinyint(<span class="number">1</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY</span> KEY (`id`),</span><br><span class="line">  KEY `id_card` (`id_card`),</span><br><span class="line">  KEY `name_age` (`name`,`age`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB</span><br></pre></td></tr></table></figure>
+
+<p><strong>问题引入：在一个市民信息表上，是否有必要将身份证号和名字建立联合索引？</strong></p>
+<p>情况1: 如果没有查询名字这个需求，就不需要。因为这样会浪费维护该联合索引的开销。</p>
+<p>情况2: 如果有一个高频的查询需要通过身份证查名字，那么就很有必要了，这样能够形成覆盖索引，减少回表次数。</p>
+<h2 id="三、最左前缀原则"><a href="#三、最左前缀原则" class="headerlink" title="三、最左前缀原则"></a>三、最左前缀原则</h2><p>​        看到这里我其实也有点疑惑，假设现在为每一个查询都设计一个索引，那么索引维护的开销会非常的大。假如现在有个低频查询需要查市民表的家庭地址，开个联合索引吧，又有点浪费，不开吧，那全表扫描有点捞。</p>
+<p>​       解决办法：<strong>B+树这种索引结构，可以利用索引的“最左前缀”，来定位记录。</strong></p>
+<p>![截屏2023-03-24 00.33.03](深入浅出索引（下）/截屏2023-03-24 00.33.03.png)</p>
+<p>假设这个联合索引(name,age)，如果查询“张三”，当然能够利用这个索引去查询。但如果用“张”去查询呢？如where name like ‘张%，那么也能够用到这个索引，查到第一个符合条件的ID3，一直向后遍历直到不满足条件为止。可以看到只要满足最左前缀，都可以利用这个索引去加速查询。</p>
+<p>从最左前缀匹配原则可以看出，如果可以合理安排联合匹配内的索引顺序，那么可以减少索引维护的数量。比如联合索引(a,b)，通过最左前缀匹配，也可以匹配查询a这个需求的，所以索引a就不需要维护了。****</p>
+<p>但是如果只有查询b并且是高频的，是无法使用联合索引(a,b)的最左前缀匹配的，只能单独再开一个索引b。<strong>这时候就需要考虑空间了，</strong>如(name,age)(age)和(age,name)(name)，假设age和name的查询都高频，并且name字段长度比age要大，那肯定是维护前者。</p>
+<h2 id="四、索引下推"><a href="#四、索引下推" class="headerlink" title="四、索引下推"></a>四、索引下推</h2><p>我们还是以市民表的联合索引（name, age）为例。如果现在有一个需求：检索出表中“名字第一个字是张，而且年龄是10岁的所有男孩”。那么，SQL语句是这么写的：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> tuser <span class="keyword">where</span> name <span class="keyword">like</span> <span class="string">&#x27;张%&#x27;</span> <span class="keyword">and</span> age<span class="operator">=</span><span class="number">10</span> <span class="keyword">and</span> ismale<span class="operator">=</span><span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>MySQL5.6前，它按照最左前缀匹配原则会找到ID3、ID4、一直找到ID6，但是查age的时候会回表，如下图：</p>
+<p>![截屏2023-03-24 00.56.42](深入浅出索引（下）/截屏2023-03-24 00.56.42.png)</p>
+<p>但5.6之后，会进行索引下推，直接在联合索引中看有没有age，本例子中下推以后是找到age了，那就直接找age符合条件的再回表，如下图：</p>
+<p>![截屏2023-03-24 00.59.12](深入浅出索引（下）/截屏2023-03-24 00.59.12.png)</p>
+<p>减少了回表次数。</p>
+<h2 id="五、总结"><a href="#五、总结" class="headerlink" title="五、总结"></a>五、总结</h2><p><strong>覆盖索引：</strong>可以减少回表次数，在二级索引的B+树上就已经能满足查询需求。有些时候为高频的查询添加联合索引能够减少回表次数以提高性能（比如案例中通过身份证号查姓名）</p>
+<p><strong>最左前缀匹配原则：</strong>在查询中可以利用索引的最左前缀匹配去加速查询，比如联合索引(name,age)，如果只查name，那么根据最左前缀匹配原则是可以使用这个联合索引的，而且这时候就减少了name这个字段的索引维护。当然，在不得不维护(a,b)和(b)这两个索引的时候，可以考虑将字段比较长的放在a。</p>
+<p><strong>索引下推：</strong>在用联合索引查询的时候，比如案例中利用最左前缀匹配查询了姓名以后，再查询符合age的记录。在没有索引下推的时候，只能查到一个“张三”就回表。有了索引下推以后，可以看这个age这个索引满不满足条件，满足再去回表，减少了回表的次数。</p>
+<h2 id="六、思考题"><a href="#六、思考题" class="headerlink" title="六、思考题"></a>六、思考题</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> `geek` (</span><br><span class="line">  `a` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `b` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `c` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `d` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY</span> KEY (`a`,`b`),</span><br><span class="line">  KEY `c` (`c`),</span><br><span class="line">  KEY `ca` (`c`,`a`),</span><br><span class="line">  KEY `cb` (`c`,`b`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>问题：为什么要创建“ca”“cb”这两个索引？</p>
+<p>因为业务里面有这样的两种语句：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> a limit <span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> b limit <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>请问这样对吗？ca索引和cb索引有没有必要</p>
+<p>答：</p>
+<p>假设现在表记录为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">–a--|–b--|–c--|–d--</span><br><span class="line">1 2 3 d</span><br><span class="line">1 3 2 d</span><br><span class="line">1 4 3 d</span><br><span class="line">2 1 3 d</span><br><span class="line">2 2 2 d</span><br><span class="line">2 3 4 d</span><br></pre></td></tr></table></figure>
+
+<p>主键a，b的聚簇索引先order a再order b，c无序。</p>
+<p>索引 ca 的组织是先按c排序，再按a排序，同时记录主键</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">–c--|–a--|–主键部分b-- （注意，这里不是ab，而是只有b）</span><br><span class="line">2 1 3</span><br><span class="line">2 2 2</span><br><span class="line">3 1 2</span><br><span class="line">3 1 4</span><br><span class="line">3 2 1</span><br><span class="line">4 2 3</span><br></pre></td></tr></table></figure>
+
+<p>索引 cb 的组织是先按c排序，在按b排序，同时记录主键</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">–c--|–b--|–主键部分a-- （同上）</span><br><span class="line">2 2 2</span><br><span class="line">2 3 1</span><br><span class="line">3 1 2</span><br><span class="line">3 2 1</span><br><span class="line">3 4 1</span><br><span class="line">4 3 2</span><br></pre></td></tr></table></figure>
+
+<p>所以综上所述，为了满足以下两个查询的需求：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> a limit <span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> b limit <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>ca索引和c索引其实重复了，所以ca索引可以去掉。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer"><div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+          <div class="post-tags">
+              <a href="/tags/MySQL/" rel="tag"># MySQL</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2023/03/23/%E4%B8%80%E6%9D%A1SQL%E6%9B%B4%E6%96%B0%E8%AF%AD%E5%8F%A5%E6%98%AF%E5%A6%82%E4%BD%95%E6%89%A7%E8%A1%8C%E7%9A%84%EF%BC%9F/" rel="prev" title="一条SQL更新语句是如何执行的？">
+                  <i class="fa fa-chevron-left"></i> 一条SQL更新语句是如何执行的？
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments gitalk-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2023</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">CarJ</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <script size="300" alpha="0.6" zIndex="-1" src="https://cdn.jsdelivr.net/npm/ribbon.js@1.0.2/dist/ribbon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  
+
+
+
+
+
+  
+
+
+
+
+<div id="needsharebutton-float">
+      <span class="btn">
+        <i class="fa fa-share-alt" aria-hidden="true"></i>
+      </span>
+    </div>
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "default";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook,Linkedin,Mailto,Reddit,Delicious,StumbleUpon,Pinterest,GooglePlus,Tumblr,GoogleBookmarks,Newsvine,Evernote,Friendfeed,Vkontakte,Odnoklassniki,Mailru";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+      flOptions = {};
+        flOptions.iconStyle = "box";
+        flOptions.boxForm = "horizontal";
+        flOptions.position = "middleRight";
+        flOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook,Linkedin";
+      new needShareButton('#needsharebutton-float', flOptions);
+  </script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gitalk@1.7.2/dist/gitalk.css" integrity="sha256-AJnUHL7dBv6PGaeyPQJcgQPDjt/Hn/PvYZde1iqfp8U=" crossorigin="anonymous">
+
+<script class="next-config" data-name="gitalk" type="application/json">{"enable":true,"github_id":"CarJJJJ","repo":"gittalk-comment","client_id":"baa92723d11166da564f","client_secret":"2f4c804dee75badc4af8af5dc5d090dc36cc525c","admin_user":"CarJJJJ","distraction_free_mode":true,"proxy":"https://cors-anywhere.azm.workers.dev/https://github.com/login/oauth/access_token","language":"zh-CN","js":{"url":"https://cdn.jsdelivr.net/npm/gitalk@1.7.2/dist/gitalk.min.js","integrity":"sha256-Pmj85ojLaPOWwRtlMJwmezB/Qg8BzvJp5eTzvXaYAfA="},"path_md5":"04edf442455a737e265ba444091d1d89"}</script>
+<script src="/js/third-party/comments/gitalk.js"></script>
+
+</body>
+</html>
