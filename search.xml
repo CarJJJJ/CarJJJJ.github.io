@@ -1,6 +1,207 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>事务隔离：为什么你改了我还看不见？</title>
+    <url>/2023/03/26/%E4%BA%8B%E5%8A%A1%E9%9A%94%E7%A6%BB%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%A0%E6%94%B9%E4%BA%86%E6%88%91%E8%BF%98%E7%9C%8B%E4%B8%8D%E8%A7%81%EF%BC%9F/</url>
+    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​       转账过程具体到程序里会有一系列的操作，比如查询余额、做加减法、更新余额等，这些操作必须保证是一体的，不然等程序查完之后，还没做减法之前，你这100块钱，完全可以借着这个时间差再查一次，然后再给另外一个朋友转账，如果银行这么整，不就乱了么？这时就要用到“事务”这个概念了。</p>
+<p>​      简单来说，事务就是要保证一组数据库的操作要么全部成功，要么全部失败。<strong>在MySQL中，事务是由引擎层所支持的。</strong></p>
+<h2 id="二、隔离性与隔离级别"><a href="#二、隔离性与隔离级别" class="headerlink" title="二、隔离性与隔离级别"></a>二、隔离性与隔离级别</h2><p>事务的4大性质：ACID，原子性、一致性、隔离性、持久性。</p>
+<p>当多个事务同时执行的时候会出现以下问题：</p>
+<p><strong>1、脏读。</strong>指的是在读数据的过程中，另外一个事务对这个这个数据进行修改了，当前事务自然是读取到了这个数据，但是另外一个事务这时候回滚了，那么这个数据就是脏数据。读取这个脏数据也称为脏读。</p>
+<p><strong>2、不可重复读。</strong>指的是当前事务在读数据的时候，另外一个事务对数据进行修改了，并且事务提交了。那么当前事务读取的数据前后不一致，就称为不可重复读。</p>
+<p><strong>3、幻读。</strong>指的是当前事务在读数据的时候，另外一个事务对数据进行了插入和删除操作，使得当前事务读数据时好像读了一条没见过的数据，或者看到某行数据不见了，就称为幻读。</p>
+<p><strong>事务的隔离级别：</strong></p>
+<p><strong>1、读未提交。</strong>指的是允许事务读取其他事务未提交的数据。</p>
+<p><strong>2、读提交。</strong>指的是只允许事务读取其他事务已经提交的数据。</p>
+<p><strong>3、可重复读。</strong>指的是一个事务在读取数据是一致的。</p>
+<p><strong>4、串行化。</strong>指的是一个事务对读写数据的时候会进行加锁，以保证事务的隔离。</p>
+<p>![截屏2023-03-26 22.40.38](事务隔离：为什么你改了我还看不见？/截屏2023-03-26 22.40.38.png)</p>
+<p>读未提交：V1=2、V2=2、V3=2。</p>
+<p>读提交：V1=1、V2=2、V3=2。</p>
+<p>可重复读：V1=1、V2=1、V3=2。</p>
+<p>串行化：V1=2、V2=2、V3=2。</p>
+<p>实现上。读未提交没有视图的概念；读提交在每个SQL语句开始执行的时候创建视图；可重复读是在事务开始的时候创建视图。串行化是直接用锁机制实现事务隔离的，没有视图。</p>
+<p><strong>可重复读的应用场景：</strong>假设你在管理一个个人银行账户表。一个表存了每个月月底的余额，一个表存了账单明细。这时候你要做数据校对，也就是判断上个月的余额和当前余额的差额，是否与本月的账单明细一致。你一定希望在校对过程中，即使有用户发生了一笔新的交易，也不影响你的校对结果。</p>
+<h2 id="三、事务隔离的实现（这里要配合第8讲阅读）"><a href="#三、事务隔离的实现（这里要配合第8讲阅读）" class="headerlink" title="三、事务隔离的实现（这里要配合第8讲阅读）"></a>三、事务隔离的实现（这里要配合第8讲阅读）</h2><p>![截屏2023-03-26 22.49.57](事务隔离：为什么你改了我还看不见？/截屏2023-03-26 22.49.57.png)</p>
+<p>每个事务对记录进行修改的时候，都会有不同的视图，也就是说一条记录可能对应多个版本，这就是数据库的多版本并发控制。这些可以回滚的记录也称为回滚日志。对于read-view A，要得到1，就必须将当前值依次执行图中所有的回滚操作得到。</p>
+<p>什么时候才不需要了呢？就是当系统里没有比这个回滚日志更早的read-view的时候。</p>
+<p>基于上面的说明，我们来讨论一下为什么建议你尽量不要使用长事务。</p>
+<p>长事务意味着系统里面会存在很老的事务视图。由于这些事务随时可能访问数据库里面的任何数据，所以这个事务提交之前，数据库里面它可能用到的回滚记录都必须保留，这就会导致大量占用存储空间。</p>
+<h2 id="四、事务的启动方式"><a href="#四、事务的启动方式" class="headerlink" title="四、事务的启动方式"></a>四、事务的启动方式</h2><p>MySQL的事务启动方式有以下几种：</p>
+<ol>
+<li>显式启动事务语句， begin 或 start transaction。配套的提交语句是commit，回滚语句是rollback。</li>
+<li>set autocommit=0，这个命令会将这个线程的自动提交关掉。意味着如果你只执行一个select语句，这个事务就启动了，而且并不会自动提交。这个事务持续存在直到你主动执行commit 或 rollback 语句，或者断开连接。</li>
+</ol>
+<h2 id="五、小结"><a href="#五、小结" class="headerlink" title="五、小结"></a>五、小结</h2><p>介绍了MySQL的事务隔离级别的现象和实现，根据实现原理分析了长事务存在的风险，以及如何用正确的方式避免长事务。</p>
+]]></content>
+      <tags>
+        <tag>MySQL</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>一条SQL更新语句是如何执行的？</title>
+    <url>/2023/03/23/%E4%B8%80%E6%9D%A1SQL%E6%9B%B4%E6%96%B0%E8%AF%AD%E5%8F%A5%E6%98%AF%E5%A6%82%E4%BD%95%E6%89%A7%E8%A1%8C%E7%9A%84%EF%BC%9F/</url>
+    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​       查询语句的执行流程一般先经过连接器、分析器、优化器、执行器等功能模块，最后达到存储引擎。那么更新语句的流程会怎么样呢？</p>
+<p>假设现在有如下建表语句和更新语句</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">create</span> <span class="keyword">table</span> T(ID <span class="type">int</span> <span class="keyword">primary</span> key, c <span class="type">int</span>);</span><br><span class="line"></span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">update</span> T <span class="keyword">set</span> c<span class="operator">=</span>c<span class="operator">+</span><span class="number">1</span> <span class="keyword">where</span> ID<span class="operator">=</span><span class="number">2</span>;</span><br></pre></td></tr></table></figure>
+
+<p>![截屏2023-03-22 22.52.37](一条SQL更新语句是如何执行的？/截屏2023-03-22 22.52.37.png)</p>
+<p>（1）更新语句首先会经过连接器，用于连接数据库。</p>
+<p>（2）这个表更新了，那么与这个表有关的查询缓存会失效，即表T上的所有缓存结果都清空了。</p>
+<p>（3）经过分析器，知道当前语句是一条更新语句，该更新语句选择ID=2这一行对c进行更新</p>
+<p>（4）优化器，负责优化sql语句的效率。（比如它会怎么更新更快）</p>
+<p>（5）执行器，负责执行sql语句。</p>
+<p><strong>但是与查询语句相比，更新语句有更重要的redo log（重做日志）和 binlog（归档日志）。</strong></p>
+<h2 id="二、redo-log（重做日志）"><a href="#二、redo-log（重做日志）" class="headerlink" title="二、redo log（重做日志）"></a>二、redo log（重做日志）</h2><p>​         如果每次更新都立刻写磁盘，那么效率太低了。MySQL提供了WAL技术：Write Ahead Logging。总的来说就是先写日志再写磁盘。</p>
+<p>​         具体来说当有一条记录需要更新的时候，InnoDB会先将记录更新写入redo log里面，并更新内存，这时候就算更新完成了。InnoDB引擎会在适当的时候将redo log的操作记录写入磁盘。（通常会在系统空闲的时候做这件事情）redo log大小通常固定，假设redo log被分配了4个大小为1GB的文件，则redo log容量为4GB，如下图：</p>
+<p>![截屏2023-03-22 23.40.39](一条SQL更新语句是如何执行的？/截屏2023-03-22 23.40.39.png)</p>
+<p>​        checkpoint是检查点，write pos是当前更新记录的位置。写的方式为循环写（如果write pos到达了ib-logfile-3的末尾，那么它会自己跳到ib-logfile-0的开头）。</p>
+<p>（1）如果需要将redo log的内容更新到磁盘，那么从check point到write pos的操作记录都会更新到磁盘，然后write pos就会回到checkpoint的位置。</p>
+<p>（2）如果当前write pos已经到达checkpoint的后面了（重叠了）那就说明redo log已经满了，这时候InnoDB会先将redo log的内容写磁盘，接着才会将这个更新操作写入redo log。</p>
+<p>  有了redo log，InnoDB就可以保证即使数据库发生异常重启，之前提交的记录都不会丢失，这个能力称为<strong>crash-safe</strong>。</p>
+<h2 id="三、binlog（归档日志）"><a href="#三、binlog（归档日志）" class="headerlink" title="三、binlog（归档日志）"></a>三、binlog（归档日志）</h2><p>binlog和redo log的区别：</p>
+<p>1、binlog是Server层自己的日志。没有crash-safe的功能。redo log是InnoDB引擎专属的，具有crash-safe的功能</p>
+<p>2、binlog记录的是这条记录更新原始记录，比如选择ID=2的行对c这一列加1。而redo log记录的是“这个数据页做了些什么修改”。</p>
+<p>3、binlog是可以追加写的，但是redo log是循环写的，空间固定。</p>
+<p>有了redo log和binlog，就知道了更新语句的内部执行流程。从连接器到执行器的步骤先省略了。</p>
+<p>![截屏2023-03-23 00.06.53](一条SQL更新语句是如何执行的？/截屏2023-03-23 00.06.53.png)</p>
+<p>步骤</p>
+<p>1、InnoDB取ID=2这一行的数据。怎么取呢？如果它在内存，那么直接返回给InnoDB；如果它在磁盘，那么需要读磁盘。</p>
+<p>2、执行器将刚刚从优化器里面拿过来的执行代码作用于InnoDB引擎拿到的这一行数据的c这一列，这时候会直接加1。并且写入到内存，同时也会写入到redo log，此时redo log的状态为prepare，告知执行器更新完成了，随时都可以提交事务。</p>
+<p>3、Server层的执行器会将这个操作写入binlog，并把binlog写入磁盘（这里其实有点疑惑，为什么不顺便把redo log也写了）</p>
+<p>4、执行器调用InnoDB引擎提供的提交事务接口，InnoDB会将redo log的状态改为commit。</p>
+<h2 id="四、两阶段提交"><a href="#四、两阶段提交" class="headerlink" title="四、两阶段提交"></a>四、两阶段提交</h2><p>​        为什么需要两阶段提交呢？为了保证两份日志的数据是一致的。</p>
+<p>​       首先可以看看没有两阶段提交会发生什么问题。会有以下两种方式：</p>
+<p><strong>1、先写redo log，再写binlog：</strong>假设现在redo log写完了，但是到了写binlog的时候，MySQL异常重启。重启以后，redo log是可以crash-safe的，那上面那个SQL语句举例子，现在c=1了。但是binlog没有这个操作记录，那么之后用binlog来恢复临时库的话，这个恢复的临时库就会与原库不一致了。</p>
+<p><strong>2、先写binlog，再写redo log：</strong>假设现在写完binlog了，但是到了写redo log的时候MySQL进程异常重启，那么重启以后，c=0。但是之后如果用binlog去恢复临时库的话，反而c=1，也不一致了。</p>
+<p>再看看两阶段提交有什么好处？</p>
+<p>1、<strong>假设现在redo log写完了，到binlog的时候MySQL进程异常重启的话：</strong>因为redo log还是prepare阶段，当查看到prepare阶段的redo log和binlog不一致的时候，会认为当前的数据并没有更新成功，事务会回滚（c变会0，redo log和binlog也不会有更新的记录）。</p>
+<p>2、假设现在redo log已经prepare阶段了，binlog也写入成功，但是InnoDB会将redo log的状态改为commit的时候发生异常了，这时候会查看binlog有没有redo log对应的操作记录，有的话，会认为当前两个日志的数据是一致的，不会回滚事务。</p>
+<p>综上所述MySQL的两阶段提交机制保证了MySQL写入的完整性。</p>
+<h2 id="五、总结"><a href="#五、总结" class="headerlink" title="五、总结"></a>五、总结</h2><p>​        本文主要讲解了redo log、binlog两个重要的日志以及他们的区别，并且讲解了这两个日志在两阶段提交当中的应用。两阶段提交机制是MySQL写入完整性的保障。</p>
+<h2 id="六、思考题"><a href="#六、思考题" class="headerlink" title="六、思考题"></a>六、思考题</h2><p>​        关于一周一备和一天一备份的好坏，目前暂时还不用了解，以后有需要再进行补充。</p>
+]]></content>
+      <tags>
+        <tag>MySQL</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>深入浅出索引（上）</title>
+    <url>/2023/03/22/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8A%EF%BC%89/</url>
+    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​        索引的出现其实就是为了加速查询效率的，它就像一本书的目录。在不借助目录的情况下，查询一个知识点的效率可能会比较慢，但有了目录，则可以快速定位知识点在哪一页。</p>
+<h2 id="二、索引的常见模型"><a href="#二、索引的常见模型" class="headerlink" title="二、索引的常见模型"></a>二、索引的常见模型</h2><h6 id="1、哈希表："><a href="#1、哈希表：" class="headerlink" title="1、哈希表："></a>1、哈希表：</h6><p>![截屏2023-03-22 19.18.46](深入浅出索引（上）/截屏2023-03-22 19.18.46.png)</p>
+<p>​        哈希表查询复杂度为O(1)，通过哈希函数快速查询key对应的value。图中所用到的处理冲突的方法为拉链法。即便查询复杂度为$O(1)$，哈希表还是不适合用于范围查询。</p>
+<p> <strong>缺点：</strong>想象一下如果进行范围查询，那岂不是需要一个一个的查？查询复杂度高达$O(n)$。</p>
+<h6 id="2、有序数组："><a href="#2、有序数组：" class="headerlink" title="2、有序数组："></a>2、有序数组：</h6><p>![截屏2023-03-22 19.31.02](深入浅出索引（上）/截屏2023-03-22 19.31.02.png) </p>
+<p>​         由于有序数组的有序性，等值查询和范围查询都比较适合。有序这一特性能够保证等值查询可以用时间复杂度为$O(logn)$的二分查找。在范围查询时，通过二分查找出范围的第一个元素，接着一直往下遍历就可以实现范围查询了！</p>
+<p><strong>缺点：</strong>如果需要插入元素，那么是一件非常麻烦的事情…</p>
+<h6 id="3、二叉搜索树-B树-B-树："><a href="#3、二叉搜索树-B树-B-树：" class="headerlink" title="3、二叉搜索树/B树/B+树："></a>3、二叉搜索树/B树/B+树：</h6><p>![截屏2023-03-22 19.41.33](深入浅出索引（上）/截屏2023-03-22 19.41.33.png)</p>
+<p>​        查询复杂度为$O(logN)$,更新维护的复杂度也是$O(logN)$。实际会采用多叉树去维护索引。</p>
+<p> <strong>缺点：</strong>实际上不会采用这种方式。假设有100万个节点，树高为20。那么每次都需要从磁盘读入一个节点到内存，在内存分析左孩子和右孩子在哪以后再去从磁盘读取左孩子和右孩子。要知道，磁盘I/O可是非常耗时的操作。</p>
+<h2 id="三、InnoDB索引模型"><a href="#三、InnoDB索引模型" class="headerlink" title="三、InnoDB索引模型"></a>三、InnoDB索引模型</h2><p>现在有以下建表语句。其中有主键id和索引k，在InnoDB中，每个索引对应一颗B+树。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> T(</span><br><span class="line">id <span class="type">int</span> <span class="keyword">primary</span> key,</span><br><span class="line">k <span class="type">int</span> <span class="keyword">not</span> <span class="keyword">null</span>,</span><br><span class="line">name <span class="type">varchar</span>(<span class="number">16</span>),</span><br><span class="line">index (k))engine<span class="operator">=</span>InnoDB;</span><br></pre></td></tr></table></figure>
+
+<p>![截屏2023-03-22 19.51.04](深入浅出索引（上）/截屏2023-03-22 19.51.04.png)</p>
+<p>主键索引的叶子结点存的是整行数据。在InnoDB中，主键索引也称为聚簇索引。</p>
+<p>非主键索引的叶子结点存的是主键的值。在InnoDB中，非主键索引也被称为二级索引。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span><span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> ID<span class="operator">=</span><span class="number">500</span></span><br></pre></td></tr></table></figure>
+
+<p>在上述SQL语句中，会进行主键查询，只需要搜索ID这颗B+树就可以返回ID=500的数据块。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span><span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> k<span class="operator">=</span><span class="number">5</span></span><br></pre></td></tr></table></figure>
+
+<p>在上述SQL语句中，会进行普通索引查询，需要从索引k这颗B+树搜索得到ID=500以后，再根据这个ID=500去搜索主键ID这颗B+树。这个过程被称为<strong>回表</strong>。</p>
+<h2 id="四、索引维护"><a href="#四、索引维护" class="headerlink" title="四、索引维护"></a>四、索引维护</h2><p>​        为了维护有序性，在插入ID=400时，需要挪动数据页中ID=500、600的数据。想象一种更糟糕的情况如果插入的数据导致页分裂了呢？页分裂会导致原来塞满一个数据页的数据现在分成了两份，页利用率会降低。综上所述，会影响性能和页利用率。当然有分裂就有合并。当相邻两个页由于删除了数据，利用率很低之后，会将数据页做合并。合并的过程，可以认为是分裂过程的逆过程。（其实这些过程就是B+树的删除和添加操作）</p>
+<p>​        为了减少维护索引的开销（增加、删除叶子结点），一个解决办法是使用<strong>自增主键</strong>，在使用了自增主键后，每次的插入操作后都不涉及数据的挪动和分裂，也就减少了像刚刚那样维护索引的时候出现性能低下与页利用率低下的情况发生啦！</p>
+<p>​       除了考虑性能和页利用率以外，还需要考虑存储空间。假设现在有一个表，确实有一个唯一字段，比如身份证号，那应该用身份证号做主键呢还是用自增字段做主键呢？假如用了身份证号，那么二级索引的叶子结点就会比较大了，那么普通索引的占用空间就会比较大。</p>
+<p>​      <strong>显然，主键长度越小，普通索引的叶子节点就越小，普通索引占用的空间也就越小。</strong></p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>​        <strong>索引、索引模型：</strong>本文讲了从索引是什么开始引入，再介绍了有几种常见的索引模型，他们各自有什么缺点，接着引入了B+树这一索引模型。由于它的这一数据结构特点非常符合我们对数据的磁盘读写，所以已经被广泛应用到数据库引擎当中了。</p>
+<p>​        <strong>InnoDB、聚簇索引、二级索引、回表：</strong>接着再介绍了InnoDB的索引模型，讲了什么是聚簇索引，什么是二级索引，还介绍了主键索引查询和非主键索引查询的区别（非主键索引查询可能会回表）！</p>
+<p>​        <strong>索引维护：</strong>根据B+树的增加与删除操作和二级索引的特点，最后再从性能、页利用率和存储空间去分析了索引维护的开销。</p>
+<h2 id="思考题"><a href="#思考题" class="headerlink" title="思考题"></a>思考题</h2><p>以下重建普通索引和主键索引有什么问题？</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">drop</span> index k;</span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">add</span> index(k);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">drop</span> <span class="keyword">primary</span> key;</span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">add</span> <span class="keyword">primary</span> key(id);</span><br></pre></td></tr></table></figure>
+
+<p><strong>关于为什么要重建索引。</strong>文章里面有提到，索引可能因为删除，或者页分裂等原因，导致数据页有空洞，重建索引的过程会创建一个新的索引，把数据按顺序插入，这样页面的利用率最高，也就是索引更紧凑、更省空间。</p>
+<p><strong>答案：</strong>重建索引k的做法是合理的，可以达到省空间的目的。但是，重建主键的过程不合理。不论是删除主键还是创建主键，都会将整个表重建。所以连着执行这两个语句的话，第一个语句就白做了。</p>
+]]></content>
+      <tags>
+        <tag>MySQL</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>深入浅出索引（下）</title>
+    <url>/2023/03/24/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8B%EF%BC%89/</url>
+    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​    假设现在有如下建表语句</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> T (</span><br><span class="line">ID <span class="type">int</span> <span class="keyword">primary</span> key,</span><br><span class="line">k <span class="type">int</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>, </span><br><span class="line">s <span class="type">varchar</span>(<span class="number">16</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#x27;</span>,</span><br><span class="line">index k(k))</span><br><span class="line">engine<span class="operator">=</span>InnoDB;</span><br><span class="line"></span><br><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> T <span class="keyword">values</span>(<span class="number">100</span>,<span class="number">1</span>, <span class="string">&#x27;aa&#x27;</span>),(<span class="number">200</span>,<span class="number">2</span>,<span class="string">&#x27;bb&#x27;</span>),(<span class="number">300</span>,<span class="number">3</span>,<span class="string">&#x27;cc&#x27;</span>),(<span class="number">500</span>,<span class="number">5</span>,<span class="string">&#x27;ee&#x27;</span>),(<span class="number">600</span>,<span class="number">6</span>,<span class="string">&#x27;ff&#x27;</span>),(<span class="number">700</span>,<span class="number">7</span>,<span class="string">&#x27;gg&#x27;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>![截屏2023-03-24 00.04.44](深入浅出索引（下）/截屏2023-03-24 00.04.44.png)</p>
+<p><strong>如果执行如下SQL语句，那么会执行几次树的搜索操作？</strong></p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> k <span class="keyword">between</span> <span class="number">3</span> <span class="keyword">and</span> <span class="number">5</span></span><br></pre></td></tr></table></figure>
+
+<p>1.首先会搜索索引k的B+树，找到k=3叶子结点，获取主键ID=300。</p>
+<p>2.回表，搜索索引ID的B+树，找到ID=300的叶子结点，获取整行数据。</p>
+<p>3.从k=3开始向下找，找到k=5，获得ID=500的叶子结点。</p>
+<p>4.回表，获得ID=500的叶子结点，获取整行数据。</p>
+<p>5.找到k=6，不符合查询规则，退出。</p>
+<p><strong>总共搜索了三次B+树，一次二级索引的B+树搜索，两次回表。</strong></p>
+<h2 id="二、覆盖索引"><a href="#二、覆盖索引" class="headerlink" title="二、覆盖索引"></a>二、覆盖索引</h2><p>​       如果执行的是以下语句，那么就不需要回表。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> ID <span class="keyword">from</span> T <span class="keyword">where</span> k <span class="keyword">between</span> <span class="number">3</span> <span class="keyword">and</span> <span class="number">5</span></span><br></pre></td></tr></table></figure>
+
+<p>​        如果索引k已经“覆盖了”我们的查询需求，我们称这种索引为覆盖索引。</p>
+<p>​       <strong>由于覆盖索引可以减少树的搜索次数，显著提升查询性能，所以使用覆盖索引是一个常用的性能优化手段。</strong></p>
+<p>​       在InnoDB引擎中是读了三个记录，但MySQL会认为是扫描行数为2，因为MySQL的Server层找引擎只拿到了2条记录。</p>
+<p>假设现在有如下市民表建表语句：</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> `tuser` (</span><br><span class="line">  `id` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `id_card` <span class="type">varchar</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `name` <span class="type">varchar</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `age` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `ismale` tinyint(<span class="number">1</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY</span> KEY (`id`),</span><br><span class="line">  KEY `id_card` (`id_card`),</span><br><span class="line">  KEY `name_age` (`name`,`age`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB</span><br></pre></td></tr></table></figure>
+
+<p><strong>问题引入：在一个市民信息表上，是否有必要将身份证号和名字建立联合索引？</strong></p>
+<p>情况1: 如果没有查询名字这个需求，就不需要。因为这样会浪费维护该联合索引的开销。</p>
+<p>情况2: 如果有一个高频的查询需要通过身份证查名字，那么就很有必要了，这样能够形成覆盖索引，减少回表次数。</p>
+<h2 id="三、最左前缀原则"><a href="#三、最左前缀原则" class="headerlink" title="三、最左前缀原则"></a>三、最左前缀原则</h2><p>​        看到这里我其实也有点疑惑，假设现在为每一个查询都设计一个索引，那么索引维护的开销会非常的大。假如现在有个低频查询需要查市民表的家庭地址，开个联合索引吧，又有点浪费，不开吧，那全表扫描有点捞。</p>
+<p>​       解决办法：<strong>B+树这种索引结构，可以利用索引的“最左前缀”，来定位记录。</strong></p>
+<p>![截屏2023-03-24 00.33.03](深入浅出索引（下）/截屏2023-03-24 00.33.03.png)</p>
+<p>假设这个联合索引(name,age)，如果查询“张三”，当然能够利用这个索引去查询。但如果用“张”去查询呢？如where name like ‘张%，那么也能够用到这个索引，查到第一个符合条件的ID3，一直向后遍历直到不满足条件为止。可以看到只要满足最左前缀，都可以利用这个索引去加速查询。</p>
+<p>从最左前缀匹配原则可以看出，如果可以合理安排联合匹配内的索引顺序，那么可以减少索引维护的数量。比如联合索引(a,b)，通过最左前缀匹配，也可以匹配查询a这个需求的，所以索引a就不需要维护了。****</p>
+<p>但是如果只有查询b并且是高频的，是无法使用联合索引(a,b)的最左前缀匹配的，只能单独再开一个索引b。<strong>这时候就需要考虑空间了，</strong>如(name,age)(age)和(age,name)(name)，假设age和name的查询都高频，并且name字段长度比age要大，那肯定是维护前者。</p>
+<h2 id="四、索引下推"><a href="#四、索引下推" class="headerlink" title="四、索引下推"></a>四、索引下推</h2><p>我们还是以市民表的联合索引（name, age）为例。如果现在有一个需求：检索出表中“名字第一个字是张，而且年龄是10岁的所有男孩”。那么，SQL语句是这么写的：</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> tuser <span class="keyword">where</span> name <span class="keyword">like</span> <span class="string">&#x27;张%&#x27;</span> <span class="keyword">and</span> age<span class="operator">=</span><span class="number">10</span> <span class="keyword">and</span> ismale<span class="operator">=</span><span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>MySQL5.6前，它按照最左前缀匹配原则会找到ID3、ID4、一直找到ID6，但是查age的时候会回表，如下图：</p>
+<p>![截屏2023-03-24 00.56.42](深入浅出索引（下）/截屏2023-03-24 00.56.42.png)</p>
+<p>但5.6之后，会进行索引下推，直接在联合索引中看有没有age，本例子中下推以后是找到age了，那就直接找age符合条件的再回表，如下图：</p>
+<p>![截屏2023-03-24 00.59.12](深入浅出索引（下）/截屏2023-03-24 00.59.12.png)</p>
+<p>减少了回表次数。</p>
+<h2 id="五、总结"><a href="#五、总结" class="headerlink" title="五、总结"></a>五、总结</h2><p><strong>覆盖索引：</strong>可以减少回表次数，在二级索引的B+树上就已经能满足查询需求。有些时候为高频的查询添加联合索引能够减少回表次数以提高性能（比如案例中通过身份证号查姓名）</p>
+<p><strong>最左前缀匹配原则：</strong>在查询中可以利用索引的最左前缀匹配去加速查询，比如联合索引(name,age)，如果只查name，那么根据最左前缀匹配原则是可以使用这个联合索引的，而且这时候就减少了name这个字段的索引维护。当然，在不得不维护(a,b)和(b)这两个索引的时候，可以考虑将字段比较长的放在a。</p>
+<p><strong>索引下推：</strong>在用联合索引查询的时候，比如案例中利用最左前缀匹配查询了姓名以后，再查询符合age的记录。在没有索引下推的时候，只能查到一个“张三”就回表。有了索引下推以后，可以看这个age这个索引满不满足条件，满足再去回表，减少了回表的次数。</p>
+<h2 id="六、思考题"><a href="#六、思考题" class="headerlink" title="六、思考题"></a>六、思考题</h2><figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> `geek` (</span><br><span class="line">  `a` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `b` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `c` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `d` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY</span> KEY (`a`,`b`),</span><br><span class="line">  KEY `c` (`c`),</span><br><span class="line">  KEY `ca` (`c`,`a`),</span><br><span class="line">  KEY `cb` (`c`,`b`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>问题：为什么要创建“ca”“cb”这两个索引？</p>
+<p>因为业务里面有这样的两种语句：</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> a limit <span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> b limit <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>请问这样对吗？ca索引和cb索引有没有必要</p>
+<p>答：</p>
+<p>假设现在表记录为：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">–a--|–b--|–c--|–d--</span><br><span class="line">1 2 3 d</span><br><span class="line">1 3 2 d</span><br><span class="line">1 4 3 d</span><br><span class="line">2 1 3 d</span><br><span class="line">2 2 2 d</span><br><span class="line">2 3 4 d</span><br></pre></td></tr></table></figure>
+
+<p>主键a，b的聚簇索引先order a再order b，c无序。</p>
+<p>索引 ca 的组织是先按c排序，再按a排序，同时记录主键</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">–c--|–a--|–主键部分b-- （注意，这里不是ab，而是只有b）</span><br><span class="line">2 1 3</span><br><span class="line">2 2 2</span><br><span class="line">3 1 2</span><br><span class="line">3 1 4</span><br><span class="line">3 2 1</span><br><span class="line">4 2 3</span><br></pre></td></tr></table></figure>
+
+<p>索引 cb 的组织是先按c排序，在按b排序，同时记录主键</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">–c--|–b--|–主键部分a-- （同上）</span><br><span class="line">2 2 2</span><br><span class="line">2 3 1</span><br><span class="line">3 1 2</span><br><span class="line">3 2 1</span><br><span class="line">3 4 1</span><br><span class="line">4 3 2</span><br></pre></td></tr></table></figure>
+
+<p>所以综上所述，为了满足以下两个查询的需求：</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> a limit <span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> b limit <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>ca索引和c索引其实重复了，所以ca索引可以去掉。</p>
+]]></content>
+      <tags>
+        <tag>MySQL</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>2022考研中山大学计算机经验贴</title>
     <url>/2022/04/26/2022%E8%80%83%E7%A0%94%E4%B8%AD%E5%B1%B1%E5%A4%A7%E5%AD%A6%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BB%8F%E9%AA%8C%E8%B4%B4/</url>
     <content><![CDATA[<h1 id="2022考研中山大学计算机经验贴"><a href="#2022考研中山大学计算机经验贴" class="headerlink" title="2022考研中山大学计算机经验贴"></a>2022考研中山大学计算机经验贴</h1><p> 提醒：<strong>个人经验仅具有参考意义</strong>，应根据个人情况吸收有帮助的部分，<strong>切不可盲目照搬</strong>。<strong>万字长文，仅供参考。</strong></p>
@@ -326,207 +527,6 @@
 ]]></content>
       <tags>
         <tag>考研</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>一条SQL更新语句是如何执行的？</title>
-    <url>/2023/03/23/%E4%B8%80%E6%9D%A1SQL%E6%9B%B4%E6%96%B0%E8%AF%AD%E5%8F%A5%E6%98%AF%E5%A6%82%E4%BD%95%E6%89%A7%E8%A1%8C%E7%9A%84%EF%BC%9F/</url>
-    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​       查询语句的执行流程一般先经过连接器、分析器、优化器、执行器等功能模块，最后达到存储引擎。那么更新语句的流程会怎么样呢？</p>
-<p>假设现在有如下建表语句和更新语句</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">create</span> <span class="keyword">table</span> T(ID <span class="type">int</span> <span class="keyword">primary</span> key, c <span class="type">int</span>);</span><br><span class="line"></span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">update</span> T <span class="keyword">set</span> c<span class="operator">=</span>c<span class="operator">+</span><span class="number">1</span> <span class="keyword">where</span> ID<span class="operator">=</span><span class="number">2</span>;</span><br></pre></td></tr></table></figure>
-
-<p>![截屏2023-03-22 22.52.37](一条SQL更新语句是如何执行的？/截屏2023-03-22 22.52.37.png)</p>
-<p>（1）更新语句首先会经过连接器，用于连接数据库。</p>
-<p>（2）这个表更新了，那么与这个表有关的查询缓存会失效，即表T上的所有缓存结果都清空了。</p>
-<p>（3）经过分析器，知道当前语句是一条更新语句，该更新语句选择ID=2这一行对c进行更新</p>
-<p>（4）优化器，负责优化sql语句的效率。（比如它会怎么更新更快）</p>
-<p>（5）执行器，负责执行sql语句。</p>
-<p><strong>但是与查询语句相比，更新语句有更重要的redo log（重做日志）和 binlog（归档日志）。</strong></p>
-<h2 id="二、redo-log（重做日志）"><a href="#二、redo-log（重做日志）" class="headerlink" title="二、redo log（重做日志）"></a>二、redo log（重做日志）</h2><p>​         如果每次更新都立刻写磁盘，那么效率太低了。MySQL提供了WAL技术：Write Ahead Logging。总的来说就是先写日志再写磁盘。</p>
-<p>​         具体来说当有一条记录需要更新的时候，InnoDB会先将记录更新写入redo log里面，并更新内存，这时候就算更新完成了。InnoDB引擎会在适当的时候将redo log的操作记录写入磁盘。（通常会在系统空闲的时候做这件事情）redo log大小通常固定，假设redo log被分配了4个大小为1GB的文件，则redo log容量为4GB，如下图：</p>
-<p>![截屏2023-03-22 23.40.39](一条SQL更新语句是如何执行的？/截屏2023-03-22 23.40.39.png)</p>
-<p>​        checkpoint是检查点，write pos是当前更新记录的位置。写的方式为循环写（如果write pos到达了ib-logfile-3的末尾，那么它会自己跳到ib-logfile-0的开头）。</p>
-<p>（1）如果需要将redo log的内容更新到磁盘，那么从check point到write pos的操作记录都会更新到磁盘，然后write pos就会回到checkpoint的位置。</p>
-<p>（2）如果当前write pos已经到达checkpoint的后面了（重叠了）那就说明redo log已经满了，这时候InnoDB会先将redo log的内容写磁盘，接着才会将这个更新操作写入redo log。</p>
-<p>  有了redo log，InnoDB就可以保证即使数据库发生异常重启，之前提交的记录都不会丢失，这个能力称为<strong>crash-safe</strong>。</p>
-<h2 id="三、binlog（归档日志）"><a href="#三、binlog（归档日志）" class="headerlink" title="三、binlog（归档日志）"></a>三、binlog（归档日志）</h2><p>binlog和redo log的区别：</p>
-<p>1、binlog是Server层自己的日志。没有crash-safe的功能。redo log是InnoDB引擎专属的，具有crash-safe的功能</p>
-<p>2、binlog记录的是这条记录更新原始记录，比如选择ID=2的行对c这一列加1。而redo log记录的是“这个数据页做了些什么修改”。</p>
-<p>3、binlog是可以追加写的，但是redo log是循环写的，空间固定。</p>
-<p>有了redo log和binlog，就知道了更新语句的内部执行流程。从连接器到执行器的步骤先省略了。</p>
-<p>![截屏2023-03-23 00.06.53](一条SQL更新语句是如何执行的？/截屏2023-03-23 00.06.53.png)</p>
-<p>步骤</p>
-<p>1、InnoDB取ID=2这一行的数据。怎么取呢？如果它在内存，那么直接返回给InnoDB；如果它在磁盘，那么需要读磁盘。</p>
-<p>2、执行器将刚刚从优化器里面拿过来的执行代码作用于InnoDB引擎拿到的这一行数据的c这一列，这时候会直接加1。并且写入到内存，同时也会写入到redo log，此时redo log的状态为prepare，告知执行器更新完成了，随时都可以提交事务。</p>
-<p>3、Server层的执行器会将这个操作写入binlog，并把binlog写入磁盘（这里其实有点疑惑，为什么不顺便把redo log也写了）</p>
-<p>4、执行器调用InnoDB引擎提供的提交事务接口，InnoDB会将redo log的状态改为commit。</p>
-<h2 id="四、两阶段提交"><a href="#四、两阶段提交" class="headerlink" title="四、两阶段提交"></a>四、两阶段提交</h2><p>​        为什么需要两阶段提交呢？为了保证两份日志的数据是一致的。</p>
-<p>​       首先可以看看没有两阶段提交会发生什么问题。会有以下两种方式：</p>
-<p><strong>1、先写redo log，再写binlog：</strong>假设现在redo log写完了，但是到了写binlog的时候，MySQL异常重启。重启以后，redo log是可以crash-safe的，那上面那个SQL语句举例子，现在c=1了。但是binlog没有这个操作记录，那么之后用binlog来恢复临时库的话，这个恢复的临时库就会与原库不一致了。</p>
-<p><strong>2、先写binlog，再写redo log：</strong>假设现在写完binlog了，但是到了写redo log的时候MySQL进程异常重启，那么重启以后，c=0。但是之后如果用binlog去恢复临时库的话，反而c=1，也不一致了。</p>
-<p>再看看两阶段提交有什么好处？</p>
-<p>1、<strong>假设现在redo log写完了，到binlog的时候MySQL进程异常重启的话：</strong>因为redo log还是prepare阶段，当查看到prepare阶段的redo log和binlog不一致的时候，会认为当前的数据并没有更新成功，事务会回滚（c变会0，redo log和binlog也不会有更新的记录）。</p>
-<p>2、假设现在redo log已经prepare阶段了，binlog也写入成功，但是InnoDB会将redo log的状态改为commit的时候发生异常了，这时候会查看binlog有没有redo log对应的操作记录，有的话，会认为当前两个日志的数据是一致的，不会回滚事务。</p>
-<p>综上所述MySQL的两阶段提交机制保证了MySQL写入的完整性。</p>
-<h2 id="五、总结"><a href="#五、总结" class="headerlink" title="五、总结"></a>五、总结</h2><p>​        本文主要讲解了redo log、binlog两个重要的日志以及他们的区别，并且讲解了这两个日志在两阶段提交当中的应用。两阶段提交机制是MySQL写入完整性的保障。</p>
-<h2 id="六、思考题"><a href="#六、思考题" class="headerlink" title="六、思考题"></a>六、思考题</h2><p>​        关于一周一备和一天一备份的好坏，目前暂时还不用了解，以后有需要再进行补充。</p>
-]]></content>
-      <tags>
-        <tag>MySQL</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>深入浅出索引（下）</title>
-    <url>/2023/03/24/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8B%EF%BC%89/</url>
-    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​    假设现在有如下建表语句</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> T (</span><br><span class="line">ID <span class="type">int</span> <span class="keyword">primary</span> key,</span><br><span class="line">k <span class="type">int</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>, </span><br><span class="line">s <span class="type">varchar</span>(<span class="number">16</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#x27;</span>,</span><br><span class="line">index k(k))</span><br><span class="line">engine<span class="operator">=</span>InnoDB;</span><br><span class="line"></span><br><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> T <span class="keyword">values</span>(<span class="number">100</span>,<span class="number">1</span>, <span class="string">&#x27;aa&#x27;</span>),(<span class="number">200</span>,<span class="number">2</span>,<span class="string">&#x27;bb&#x27;</span>),(<span class="number">300</span>,<span class="number">3</span>,<span class="string">&#x27;cc&#x27;</span>),(<span class="number">500</span>,<span class="number">5</span>,<span class="string">&#x27;ee&#x27;</span>),(<span class="number">600</span>,<span class="number">6</span>,<span class="string">&#x27;ff&#x27;</span>),(<span class="number">700</span>,<span class="number">7</span>,<span class="string">&#x27;gg&#x27;</span>);</span><br></pre></td></tr></table></figure>
-
-<p>![截屏2023-03-24 00.04.44](深入浅出索引（下）/截屏2023-03-24 00.04.44.png)</p>
-<p><strong>如果执行如下SQL语句，那么会执行几次树的搜索操作？</strong></p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> k <span class="keyword">between</span> <span class="number">3</span> <span class="keyword">and</span> <span class="number">5</span></span><br></pre></td></tr></table></figure>
-
-<p>1.首先会搜索索引k的B+树，找到k=3叶子结点，获取主键ID=300。</p>
-<p>2.回表，搜索索引ID的B+树，找到ID=300的叶子结点，获取整行数据。</p>
-<p>3.从k=3开始向下找，找到k=5，获得ID=500的叶子结点。</p>
-<p>4.回表，获得ID=500的叶子结点，获取整行数据。</p>
-<p>5.找到k=6，不符合查询规则，退出。</p>
-<p><strong>总共搜索了三次B+树，一次二级索引的B+树搜索，两次回表。</strong></p>
-<h2 id="二、覆盖索引"><a href="#二、覆盖索引" class="headerlink" title="二、覆盖索引"></a>二、覆盖索引</h2><p>​       如果执行的是以下语句，那么就不需要回表。</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> ID <span class="keyword">from</span> T <span class="keyword">where</span> k <span class="keyword">between</span> <span class="number">3</span> <span class="keyword">and</span> <span class="number">5</span></span><br></pre></td></tr></table></figure>
-
-<p>​        如果索引k已经“覆盖了”我们的查询需求，我们称这种索引为覆盖索引。</p>
-<p>​       <strong>由于覆盖索引可以减少树的搜索次数，显著提升查询性能，所以使用覆盖索引是一个常用的性能优化手段。</strong></p>
-<p>​       在InnoDB引擎中是读了三个记录，但MySQL会认为是扫描行数为2，因为MySQL的Server层找引擎只拿到了2条记录。</p>
-<p>假设现在有如下市民表建表语句：</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> `tuser` (</span><br><span class="line">  `id` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `id_card` <span class="type">varchar</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `name` <span class="type">varchar</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `age` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `ismale` tinyint(<span class="number">1</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY</span> KEY (`id`),</span><br><span class="line">  KEY `id_card` (`id_card`),</span><br><span class="line">  KEY `name_age` (`name`,`age`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB</span><br></pre></td></tr></table></figure>
-
-<p><strong>问题引入：在一个市民信息表上，是否有必要将身份证号和名字建立联合索引？</strong></p>
-<p>情况1: 如果没有查询名字这个需求，就不需要。因为这样会浪费维护该联合索引的开销。</p>
-<p>情况2: 如果有一个高频的查询需要通过身份证查名字，那么就很有必要了，这样能够形成覆盖索引，减少回表次数。</p>
-<h2 id="三、最左前缀原则"><a href="#三、最左前缀原则" class="headerlink" title="三、最左前缀原则"></a>三、最左前缀原则</h2><p>​        看到这里我其实也有点疑惑，假设现在为每一个查询都设计一个索引，那么索引维护的开销会非常的大。假如现在有个低频查询需要查市民表的家庭地址，开个联合索引吧，又有点浪费，不开吧，那全表扫描有点捞。</p>
-<p>​       解决办法：<strong>B+树这种索引结构，可以利用索引的“最左前缀”，来定位记录。</strong></p>
-<p>![截屏2023-03-24 00.33.03](深入浅出索引（下）/截屏2023-03-24 00.33.03.png)</p>
-<p>假设这个联合索引(name,age)，如果查询“张三”，当然能够利用这个索引去查询。但如果用“张”去查询呢？如where name like ‘张%，那么也能够用到这个索引，查到第一个符合条件的ID3，一直向后遍历直到不满足条件为止。可以看到只要满足最左前缀，都可以利用这个索引去加速查询。</p>
-<p>从最左前缀匹配原则可以看出，如果可以合理安排联合匹配内的索引顺序，那么可以减少索引维护的数量。比如联合索引(a,b)，通过最左前缀匹配，也可以匹配查询a这个需求的，所以索引a就不需要维护了。****</p>
-<p>但是如果只有查询b并且是高频的，是无法使用联合索引(a,b)的最左前缀匹配的，只能单独再开一个索引b。<strong>这时候就需要考虑空间了，</strong>如(name,age)(age)和(age,name)(name)，假设age和name的查询都高频，并且name字段长度比age要大，那肯定是维护前者。</p>
-<h2 id="四、索引下推"><a href="#四、索引下推" class="headerlink" title="四、索引下推"></a>四、索引下推</h2><p>我们还是以市民表的联合索引（name, age）为例。如果现在有一个需求：检索出表中“名字第一个字是张，而且年龄是10岁的所有男孩”。那么，SQL语句是这么写的：</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> tuser <span class="keyword">where</span> name <span class="keyword">like</span> <span class="string">&#x27;张%&#x27;</span> <span class="keyword">and</span> age<span class="operator">=</span><span class="number">10</span> <span class="keyword">and</span> ismale<span class="operator">=</span><span class="number">1</span>;</span><br></pre></td></tr></table></figure>
-
-<p>MySQL5.6前，它按照最左前缀匹配原则会找到ID3、ID4、一直找到ID6，但是查age的时候会回表，如下图：</p>
-<p>![截屏2023-03-24 00.56.42](深入浅出索引（下）/截屏2023-03-24 00.56.42.png)</p>
-<p>但5.6之后，会进行索引下推，直接在联合索引中看有没有age，本例子中下推以后是找到age了，那就直接找age符合条件的再回表，如下图：</p>
-<p>![截屏2023-03-24 00.59.12](深入浅出索引（下）/截屏2023-03-24 00.59.12.png)</p>
-<p>减少了回表次数。</p>
-<h2 id="五、总结"><a href="#五、总结" class="headerlink" title="五、总结"></a>五、总结</h2><p><strong>覆盖索引：</strong>可以减少回表次数，在二级索引的B+树上就已经能满足查询需求。有些时候为高频的查询添加联合索引能够减少回表次数以提高性能（比如案例中通过身份证号查姓名）</p>
-<p><strong>最左前缀匹配原则：</strong>在查询中可以利用索引的最左前缀匹配去加速查询，比如联合索引(name,age)，如果只查name，那么根据最左前缀匹配原则是可以使用这个联合索引的，而且这时候就减少了name这个字段的索引维护。当然，在不得不维护(a,b)和(b)这两个索引的时候，可以考虑将字段比较长的放在a。</p>
-<p><strong>索引下推：</strong>在用联合索引查询的时候，比如案例中利用最左前缀匹配查询了姓名以后，再查询符合age的记录。在没有索引下推的时候，只能查到一个“张三”就回表。有了索引下推以后，可以看这个age这个索引满不满足条件，满足再去回表，减少了回表的次数。</p>
-<h2 id="六、思考题"><a href="#六、思考题" class="headerlink" title="六、思考题"></a>六、思考题</h2><figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> `geek` (</span><br><span class="line">  `a` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `b` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `c` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  `d` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT</span> <span class="keyword">NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY</span> KEY (`a`,`b`),</span><br><span class="line">  KEY `c` (`c`),</span><br><span class="line">  KEY `ca` (`c`,`a`),</span><br><span class="line">  KEY `cb` (`c`,`b`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<p>问题：为什么要创建“ca”“cb”这两个索引？</p>
-<p>因为业务里面有这样的两种语句：</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> a limit <span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> b limit <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
-
-<p>请问这样对吗？ca索引和cb索引有没有必要</p>
-<p>答：</p>
-<p>假设现在表记录为：</p>
-<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">–a--|–b--|–c--|–d--</span><br><span class="line">1 2 3 d</span><br><span class="line">1 3 2 d</span><br><span class="line">1 4 3 d</span><br><span class="line">2 1 3 d</span><br><span class="line">2 2 2 d</span><br><span class="line">2 3 4 d</span><br></pre></td></tr></table></figure>
-
-<p>主键a，b的聚簇索引先order a再order b，c无序。</p>
-<p>索引 ca 的组织是先按c排序，再按a排序，同时记录主键</p>
-<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">–c--|–a--|–主键部分b-- （注意，这里不是ab，而是只有b）</span><br><span class="line">2 1 3</span><br><span class="line">2 2 2</span><br><span class="line">3 1 2</span><br><span class="line">3 1 4</span><br><span class="line">3 2 1</span><br><span class="line">4 2 3</span><br></pre></td></tr></table></figure>
-
-<p>索引 cb 的组织是先按c排序，在按b排序，同时记录主键</p>
-<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">–c--|–b--|–主键部分a-- （同上）</span><br><span class="line">2 2 2</span><br><span class="line">2 3 1</span><br><span class="line">3 1 2</span><br><span class="line">3 2 1</span><br><span class="line">3 4 1</span><br><span class="line">4 3 2</span><br></pre></td></tr></table></figure>
-
-<p>所以综上所述，为了满足以下两个查询的需求：</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> a limit <span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> geek <span class="keyword">where</span> c<span class="operator">=</span>N <span class="keyword">order</span> <span class="keyword">by</span> b limit <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
-
-<p>ca索引和c索引其实重复了，所以ca索引可以去掉。</p>
-]]></content>
-      <tags>
-        <tag>MySQL</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>深入浅出索引（上）</title>
-    <url>/2023/03/22/%E6%B7%B1%E5%85%A5%E6%B5%85%E5%87%BA%E7%B4%A2%E5%BC%95%EF%BC%88%E4%B8%8A%EF%BC%89/</url>
-    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​        索引的出现其实就是为了加速查询效率的，它就像一本书的目录。在不借助目录的情况下，查询一个知识点的效率可能会比较慢，但有了目录，则可以快速定位知识点在哪一页。</p>
-<h2 id="二、索引的常见模型"><a href="#二、索引的常见模型" class="headerlink" title="二、索引的常见模型"></a>二、索引的常见模型</h2><h6 id="1、哈希表："><a href="#1、哈希表：" class="headerlink" title="1、哈希表："></a>1、哈希表：</h6><p>![截屏2023-03-22 19.18.46](深入浅出索引（上）/截屏2023-03-22 19.18.46.png)</p>
-<p>​        哈希表查询复杂度为O(1)，通过哈希函数快速查询key对应的value。图中所用到的处理冲突的方法为拉链法。即便查询复杂度为$O(1)$，哈希表还是不适合用于范围查询。</p>
-<p> <strong>缺点：</strong>想象一下如果进行范围查询，那岂不是需要一个一个的查？查询复杂度高达$O(n)$。</p>
-<h6 id="2、有序数组："><a href="#2、有序数组：" class="headerlink" title="2、有序数组："></a>2、有序数组：</h6><p>![截屏2023-03-22 19.31.02](深入浅出索引（上）/截屏2023-03-22 19.31.02.png) </p>
-<p>​         由于有序数组的有序性，等值查询和范围查询都比较适合。有序这一特性能够保证等值查询可以用时间复杂度为$O(logn)$的二分查找。在范围查询时，通过二分查找出范围的第一个元素，接着一直往下遍历就可以实现范围查询了！</p>
-<p><strong>缺点：</strong>如果需要插入元素，那么是一件非常麻烦的事情…</p>
-<h6 id="3、二叉搜索树-B树-B-树："><a href="#3、二叉搜索树-B树-B-树：" class="headerlink" title="3、二叉搜索树/B树/B+树："></a>3、二叉搜索树/B树/B+树：</h6><p>![截屏2023-03-22 19.41.33](深入浅出索引（上）/截屏2023-03-22 19.41.33.png)</p>
-<p>​        查询复杂度为$O(logN)$,更新维护的复杂度也是$O(logN)$。实际会采用多叉树去维护索引。</p>
-<p> <strong>缺点：</strong>实际上不会采用这种方式。假设有100万个节点，树高为20。那么每次都需要从磁盘读入一个节点到内存，在内存分析左孩子和右孩子在哪以后再去从磁盘读取左孩子和右孩子。要知道，磁盘I/O可是非常耗时的操作。</p>
-<h2 id="三、InnoDB索引模型"><a href="#三、InnoDB索引模型" class="headerlink" title="三、InnoDB索引模型"></a>三、InnoDB索引模型</h2><p>现在有以下建表语句。其中有主键id和索引k，在InnoDB中，每个索引对应一颗B+树。</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> T(</span><br><span class="line">id <span class="type">int</span> <span class="keyword">primary</span> key,</span><br><span class="line">k <span class="type">int</span> <span class="keyword">not</span> <span class="keyword">null</span>,</span><br><span class="line">name <span class="type">varchar</span>(<span class="number">16</span>),</span><br><span class="line">index (k))engine<span class="operator">=</span>InnoDB;</span><br></pre></td></tr></table></figure>
-
-<p>![截屏2023-03-22 19.51.04](深入浅出索引（上）/截屏2023-03-22 19.51.04.png)</p>
-<p>主键索引的叶子结点存的是整行数据。在InnoDB中，主键索引也称为聚簇索引。</p>
-<p>非主键索引的叶子结点存的是主键的值。在InnoDB中，非主键索引也被称为二级索引。</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span><span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> ID<span class="operator">=</span><span class="number">500</span></span><br></pre></td></tr></table></figure>
-
-<p>在上述SQL语句中，会进行主键查询，只需要搜索ID这颗B+树就可以返回ID=500的数据块。</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">select</span><span class="operator">*</span> <span class="keyword">from</span> T <span class="keyword">where</span> k<span class="operator">=</span><span class="number">5</span></span><br></pre></td></tr></table></figure>
-
-<p>在上述SQL语句中，会进行普通索引查询，需要从索引k这颗B+树搜索得到ID=500以后，再根据这个ID=500去搜索主键ID这颗B+树。这个过程被称为<strong>回表</strong>。</p>
-<h2 id="四、索引维护"><a href="#四、索引维护" class="headerlink" title="四、索引维护"></a>四、索引维护</h2><p>​        为了维护有序性，在插入ID=400时，需要挪动数据页中ID=500、600的数据。想象一种更糟糕的情况如果插入的数据导致页分裂了呢？页分裂会导致原来塞满一个数据页的数据现在分成了两份，页利用率会降低。综上所述，会影响性能和页利用率。当然有分裂就有合并。当相邻两个页由于删除了数据，利用率很低之后，会将数据页做合并。合并的过程，可以认为是分裂过程的逆过程。（其实这些过程就是B+树的删除和添加操作）</p>
-<p>​        为了减少维护索引的开销（增加、删除叶子结点），一个解决办法是使用<strong>自增主键</strong>，在使用了自增主键后，每次的插入操作后都不涉及数据的挪动和分裂，也就减少了像刚刚那样维护索引的时候出现性能低下与页利用率低下的情况发生啦！</p>
-<p>​       除了考虑性能和页利用率以外，还需要考虑存储空间。假设现在有一个表，确实有一个唯一字段，比如身份证号，那应该用身份证号做主键呢还是用自增字段做主键呢？假如用了身份证号，那么二级索引的叶子结点就会比较大了，那么普通索引的占用空间就会比较大。</p>
-<p>​      <strong>显然，主键长度越小，普通索引的叶子节点就越小，普通索引占用的空间也就越小。</strong></p>
-<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>​        <strong>索引、索引模型：</strong>本文讲了从索引是什么开始引入，再介绍了有几种常见的索引模型，他们各自有什么缺点，接着引入了B+树这一索引模型。由于它的这一数据结构特点非常符合我们对数据的磁盘读写，所以已经被广泛应用到数据库引擎当中了。</p>
-<p>​        <strong>InnoDB、聚簇索引、二级索引、回表：</strong>接着再介绍了InnoDB的索引模型，讲了什么是聚簇索引，什么是二级索引，还介绍了主键索引查询和非主键索引查询的区别（非主键索引查询可能会回表）！</p>
-<p>​        <strong>索引维护：</strong>根据B+树的增加与删除操作和二级索引的特点，最后再从性能、页利用率和存储空间去分析了索引维护的开销。</p>
-<h2 id="思考题"><a href="#思考题" class="headerlink" title="思考题"></a>思考题</h2><p>以下重建普通索引和主键索引有什么问题？</p>
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">drop</span> index k;</span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">add</span> index(k);</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">drop</span> <span class="keyword">primary</span> key;</span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> T <span class="keyword">add</span> <span class="keyword">primary</span> key(id);</span><br></pre></td></tr></table></figure>
-
-<p><strong>关于为什么要重建索引。</strong>文章里面有提到，索引可能因为删除，或者页分裂等原因，导致数据页有空洞，重建索引的过程会创建一个新的索引，把数据按顺序插入，这样页面的利用率最高，也就是索引更紧凑、更省空间。</p>
-<p><strong>答案：</strong>重建索引k的做法是合理的，可以达到省空间的目的。但是，重建主键的过程不合理。不论是删除主键还是创建主键，都会将整个表重建。所以连着执行这两个语句的话，第一个语句就白做了。</p>
-]]></content>
-      <tags>
-        <tag>MySQL</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>事务隔离：为什么你改了我还看不见？</title>
-    <url>/2023/03/26/%E4%BA%8B%E5%8A%A1%E9%9A%94%E7%A6%BB%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%A0%E6%94%B9%E4%BA%86%E6%88%91%E8%BF%98%E7%9C%8B%E4%B8%8D%E8%A7%81%EF%BC%9F/</url>
-    <content><![CDATA[<h2 id="一、引言"><a href="#一、引言" class="headerlink" title="一、引言"></a>一、引言</h2><p>​       转账过程具体到程序里会有一系列的操作，比如查询余额、做加减法、更新余额等，这些操作必须保证是一体的，不然等程序查完之后，还没做减法之前，你这100块钱，完全可以借着这个时间差再查一次，然后再给另外一个朋友转账，如果银行这么整，不就乱了么？这时就要用到“事务”这个概念了。</p>
-<p>​      简单来说，事务就是要保证一组数据库的操作要么全部成功，要么全部失败。<strong>在MySQL中，事务是由引擎层所支持的。</strong></p>
-<h2 id="二、隔离性与隔离级别"><a href="#二、隔离性与隔离级别" class="headerlink" title="二、隔离性与隔离级别"></a>二、隔离性与隔离级别</h2><p>事务的4大性质：ACID，原子性、一致性、隔离性、持久性。</p>
-<p>当多个事务同时执行的时候会出现以下问题：</p>
-<p><strong>1、脏读。</strong>指的是在读数据的过程中，另外一个事务对这个这个数据进行修改了，当前事务自然是读取到了这个数据，但是另外一个事务这时候回滚了，那么这个数据就是脏数据。读取这个脏数据也称为脏读。</p>
-<p><strong>2、不可重复读。</strong>指的是当前事务在读数据的时候，另外一个事务对数据进行修改了，并且事务提交了。那么当前事务读取的数据前后不一致，就称为不可重复读。</p>
-<p><strong>3、幻读。</strong>指的是当前事务在读数据的时候，另外一个事务对数据进行了插入和删除操作，使得当前事务读数据时好像读了一条没见过的数据，或者看到某行数据不见了，就称为幻读。</p>
-<p><strong>事务的隔离级别：</strong></p>
-<p><strong>1、读未提交。</strong>指的是允许事务读取其他事务未提交的数据。</p>
-<p><strong>2、读提交。</strong>指的是只允许事务读取其他事务已经提交的数据。</p>
-<p><strong>3、可重复读。</strong>指的是一个事务在读取数据是一致的。</p>
-<p><strong>4、串行化。</strong>指的是一个事务对读写数据的时候会进行加锁，以保证事务的隔离。</p>
-<p>![截屏2023-03-26 22.40.38](事务隔离：为什么你改了我还看不见？/截屏2023-03-26 22.40.38.png)</p>
-<p>读未提交：V1=2、V2=2、V3=2。</p>
-<p>读提交：V1=1、V2=2、V3=2。</p>
-<p>可重复读：V1=1、V2=1、V3=2。</p>
-<p>串行化：V1=2、V2=2、V3=2。</p>
-<p>实现上。读未提交没有视图的概念；读提交在每个SQL语句开始执行的时候创建视图；可重复读是在事务开始的时候创建视图。串行化是直接用锁机制实现事务隔离的，没有视图。</p>
-<p><strong>可重复读的应用场景：</strong>假设你在管理一个个人银行账户表。一个表存了每个月月底的余额，一个表存了账单明细。这时候你要做数据校对，也就是判断上个月的余额和当前余额的差额，是否与本月的账单明细一致。你一定希望在校对过程中，即使有用户发生了一笔新的交易，也不影响你的校对结果。</p>
-<h2 id="三、事务隔离的实现（这里要配合第8讲阅读）"><a href="#三、事务隔离的实现（这里要配合第8讲阅读）" class="headerlink" title="三、事务隔离的实现（这里要配合第8讲阅读）"></a>三、事务隔离的实现（这里要配合第8讲阅读）</h2><p>![截屏2023-03-26 22.49.57](事务隔离：为什么你改了我还看不见？/截屏2023-03-26 22.49.57.png)</p>
-<p>每个事务对记录进行修改的时候，都会有不同的视图，也就是说一条记录可能对应多个版本，这就是数据库的多版本并发控制。这些可以回滚的记录也称为回滚日志。对于read-view A，要得到1，就必须将当前值依次执行图中所有的回滚操作得到。</p>
-<p>什么时候才不需要了呢？就是当系统里没有比这个回滚日志更早的read-view的时候。</p>
-<p>基于上面的说明，我们来讨论一下为什么建议你尽量不要使用长事务。</p>
-<p>长事务意味着系统里面会存在很老的事务视图。由于这些事务随时可能访问数据库里面的任何数据，所以这个事务提交之前，数据库里面它可能用到的回滚记录都必须保留，这就会导致大量占用存储空间。</p>
-<h2 id="四、事务的启动方式"><a href="#四、事务的启动方式" class="headerlink" title="四、事务的启动方式"></a>四、事务的启动方式</h2><p>MySQL的事务启动方式有以下几种：</p>
-<ol>
-<li>显式启动事务语句， begin 或 start transaction。配套的提交语句是commit，回滚语句是rollback。</li>
-<li>set autocommit=0，这个命令会将这个线程的自动提交关掉。意味着如果你只执行一个select语句，这个事务就启动了，而且并不会自动提交。这个事务持续存在直到你主动执行commit 或 rollback 语句，或者断开连接。</li>
-</ol>
-<h2 id="五、小结"><a href="#五、小结" class="headerlink" title="五、小结"></a>五、小结</h2><p>介绍了MySQL的事务隔离级别的现象和实现，根据实现原理分析了长事务存在的风险，以及如何用正确的方式避免长事务。</p>
-]]></content>
-      <tags>
-        <tag>MySQL</tag>
       </tags>
   </entry>
 </search>
